@@ -2,13 +2,13 @@
 -- Initial schema for Supabase (PostgreSQL)
 -- Run in the Supabase SQL editor, or via `supabase db push`.
 
--- Calendar events: tasks, exams, appointments, birthdays, etc.
+-- Calendar events: tasks, exams, appointments, etc.
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   title text not null,
   description text,
-  category text not null default 'task', -- task, exam, appointment, birthday, study_session
+  category text not null default 'task', -- task, exam, appointment, study_session
   start_at timestamptz not null,
   end_at timestamptz,
   completed boolean not null default false,

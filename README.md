@@ -1,6 +1,6 @@
 # Schedule Planner - Study Buddy
 
-COMP 585 project — a scheduling app for students with Pomodoro-based focus
+A scheduling app for students with Pomodoro-based focus
 sessions, streaks, and a growth mechanic (pet/plant) tied to study habits.
 
 ## Tech Stack
@@ -16,12 +16,12 @@ sessions, streaks, and a growth mechanic (pet/plant) tied to study habits.
    ```
    npm install
    ```
-2. Create a Supabase project, then copy `.env.example` to `.env` and fill in
+2. TODO: Create a Supabase project, then fill in
    your project's URL and anon key:
    ```
-   cp .env.example .env
+   cp .env
    ```
-3. Apply the database schema in `supabase/schema.sql` via the Supabase SQL
+3. TODO: Apply the database schema in `supabase/schema.sql` via the Supabase SQL
    editor (or `supabase db push` if using the Supabase CLI).
 4. Run the dev server:
    ```
