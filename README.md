@@ -16,14 +16,13 @@ sessions, streaks, and a growth mechanic (pet/plant) tied to study habits.
    ```
    npm install
    ```
-2. TODO: Create a Supabase project, then fill in
-   your project's URL and anon key:
-   ```
-   cp .env
-   ```
-3. TODO: Apply the database schema in `supabase/schema.sql` via the Supabase SQL
+2. Create .env file in project root
+
+3. Paste env variables into .env file
+   
+4. TODO: Apply the database schema in `supabase/schema.sql` via the Supabase SQL
    editor (or `supabase db push` if using the Supabase CLI).
-4. Run the dev server:
+5. Run the dev server:
    ```
    npm run dev
    ```
