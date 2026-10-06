@@ -20,3 +20,18 @@ alter table public.tasks enable row level security;
 
 create policy "Users manage their own tasks" on public.tasks
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists public.study_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  task_id uuid references public.tasks (id) on delete set null,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz,
+  completed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.study_sessions enable row level security;
+
+create policy "Users manage their own study sessions" on public.study_sessions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
