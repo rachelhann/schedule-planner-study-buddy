@@ -1,8 +1,9 @@
 <script setup>
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 
 async function handleSignOut() {
@@ -23,7 +24,7 @@ async function handleSignOut() {
       <RouterLink to="/notifications">Notifications</RouterLink>
       <button type="button" class="app-nav__signout" @click="handleSignOut">Sign out</button>
     </nav>
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main--auth': route.meta.public }">
       <RouterView />
     </main>
   </div>
@@ -56,5 +57,9 @@ async function handleSignOut() {
 .app-main {
   flex: 1;
   padding: 1.5rem;
+}
+
+.app-main--auth {
+  padding: 0;
 }
 </style>
