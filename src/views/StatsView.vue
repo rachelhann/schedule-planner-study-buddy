@@ -13,6 +13,16 @@ const week = [
   { day: 'Fri', sessions: 4 }, { day: 'Sat', sessions: 1 },
   { day: 'Sun', sessions: 5 },
 ]
+const hoveredDay = ref(null)
+const focusedDay = ref(null)
+const activeDay = computed(() => hoveredDay.value ?? focusedDay.value)
+const dayNames = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }
+
+function dismissSessionTooltip() {
+  hoveredDay.value = null
+  focusedDay.value = null
+}
+
 const activity = [2, 1, 3, 4, 0, 0, 3, 4, 0, 2, 4, 0, 4, 1, 0, 0, 3, 3, 0, 1, 0, 4, 3, 0, 3, 4, 0, 1]
 const subjects = [
   { name: 'Math', percent: 35, time: '13h 25m', color: '#83a98c' },
@@ -82,10 +92,27 @@ const goals = [
           <span class="period-label">This week</span>
         </div>
         <p class="panel-description">Every session is a step forward.</p>
-        <div class="bar-chart" role="img" aria-label="Sessions this week: Monday 3, Tuesday 5, Wednesday 2, Thursday 6, Friday 4, Saturday 1, Sunday 5.">
+        <div class="bar-chart" role="group" aria-label="Sessions this week" @keydown.esc="dismissSessionTooltip">
           <div v-for="day in week" :key="day.day" class="bar-column">
             <div class="bar-track">
-              <div class="bar" :style="{ height: `${day.sessions / 6 * 85}%` }"><span class="bar-value">{{ day.sessions }}</span></div>
+              <div
+                class="bar-shell"
+                :class="{ 'bar-shell--active': activeDay === day.day }"
+                :style="{ height: `${day.sessions / 6 * 85}%` }"
+                tabindex="0" role="img"
+                :aria-label="`${dayNames[day.day]}: ${day.sessions} ${day.sessions === 1 ? 'session' : 'sessions'}`"
+                :aria-describedby="activeDay === day.day ? 'session-tooltip' : undefined"
+                @pointerenter="hoveredDay = day.day"
+                @pointerleave="hoveredDay = null"
+                @focus="focusedDay = day.day"
+                @blur="focusedDay = null"
+              >
+                <div class="bar" aria-hidden="true"><span class="bar-value">{{ day.sessions }}</span></div>
+                <div v-if="activeDay === day.day" id="session-tooltip" class="bar-tooltip" role="tooltip">
+                  <strong>{{ dayNames[day.day] }}</strong>
+                  <span>{{ day.sessions }} {{ day.sessions === 1 ? 'session' : 'sessions' }} completed</span>
+                </div>
+              </div>
             </div>
             <span class="bar-label">{{ day.day }}</span>
           </div>
@@ -206,7 +233,20 @@ const goals = [
 .bar-chart { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); height: 260px; gap: 12px; margin-top: 20px; }
 .bar-column { min-width: 0; display: flex; flex-direction: column; align-items: center; }
 .bar-track { width: 100%; flex: 1; display: flex; align-items: end; justify-content: center; border-bottom: 1px solid #eceee8; }
-.bar { position: relative; width: min(100%, 34px); background: var(--accent); border-radius: 8px 8px 3px 3px; }
+.bar-shell { position: relative; width: min(100%, 34px); }
+.bar { position: absolute; inset: 0; background: var(--accent); border-radius: 8px 8px 3px 3px; transition: transform 180ms ease, box-shadow 180ms ease; }
+.bar-shell--active .bar { transform: translateY(-5px); box-shadow: 0 5px 10px rgb(37 43 33 / 15%); }
+.bar-shell--active .bar-value { visibility: hidden; }
+.bar-shell--active { z-index: 1; }
+.bar-tooltip { position: absolute; bottom: calc(100% + 16px); left: 50%; transform: translateX(-50%); width: max-content; padding: 12px 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 14px rgb(37 43 33 / 10%); pointer-events: none; font-size: 13px; }
+.bar-tooltip strong { display: block; color: var(--accent); font-size: 16px; margin-bottom: 4px; }
+.bar-tooltip span { color: var(--text); }
+.bar-column:first-child .bar-tooltip { left: 0; transform: none; }
+.bar-column:last-child .bar-tooltip { left: auto; right: 0; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .bar { transition: none; }
+  .bar-shell--active .bar { transform: none; }
+}
 .bar-value { position: absolute; top: -25px; width: 100%; text-align: center; color: var(--text); font-size: 12px; }
 .bar-label { color: var(--text); font-size: 11px; padding-top: 10px; }
 .heatmap-days, .heatmap { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
