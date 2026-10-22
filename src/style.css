@@ -34,4 +34,22 @@ button:disabled { cursor: default; }
 /* Reusable content styles; views own their grids and charts. */
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 36px; }
 .page-heading p { font-size: 18px; }
-.panel { background: #fff; border: 1px solid var(--border); border-radius: 22px; padding: 28px; min-width: 0; }
+.panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 28px;
+  min-width: 0;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+@media (hover: hover) {
+  .panel:hover {
+    transform: translateY(-3px);
+    border-color: #cbd8c8;
+    box-shadow: 0 6px 18px rgb(37 43 33 / 7%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
+  .panel:hover { transform: none; }
+}
