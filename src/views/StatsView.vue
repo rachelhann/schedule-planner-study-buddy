@@ -1,4 +1,6 @@
 <script setup>
+import { computed, ref } from 'vue'
+
 // Presentation-only fixtures; connect to real activity data later.
 const summary = [
   { label: 'Total focus time', value: '38h 20m', detail: '↑ 12% vs last month' },
@@ -19,6 +21,35 @@ const subjects = [
   { name: 'History', percent: 12, time: '4h 36m', color: '#afc6d8' },
   { name: 'Other', percent: 10, time: '3h 50m', color: '#c9b9dc' },
 ]
+const hoveredSubject = ref(null)
+const focusedSubject = ref(null)
+const activeSubject = computed(() => hoveredSubject.value ?? focusedSubject.value)
+function slicePoint(radius, percent) {
+  const angle = percent / 100 * Math.PI * 2 - Math.PI / 2
+  return `${75 + radius * Math.cos(angle)} ${75 + radius * Math.sin(angle)}`
+}
+
+let subjectOffset = 0
+const subjectSlices = subjects.map((subject) => {
+  const start = subjectOffset
+  const end = start + subject.percent
+  const largeArc = subject.percent > 50 ? 1 : 0
+  const middleAngle = (start + end) / 2 / 100 * Math.PI * 2 - Math.PI / 2
+  const slice = {
+    ...subject,
+    liftX: `${Math.cos(middleAngle) * 6}px`,
+    liftY: `${Math.sin(middleAngle) * 6}px`,
+    path: `M ${slicePoint(75, start)} A 75 75 0 ${largeArc} 1 ${slicePoint(75, end)} L ${slicePoint(54, end)} A 54 54 0 ${largeArc} 0 ${slicePoint(54, start)} Z`,
+  }
+  subjectOffset = end
+  return slice
+})
+
+function dismissSubjectTooltip() {
+  hoveredSubject.value = null
+  focusedSubject.value = null
+}
+
 const goals = [
   { name: 'Prepare for calculus exam', current: 12, target: 20 },
   { name: 'Finish science revision', current: 8, target: 10 },
@@ -82,13 +113,37 @@ const goals = [
         <h2 id="subjects-title">Subject breakdown</h2>
         <p class="panel-description">Where your focus time went.</p>
         <div class="subject-content">
-          <div class="donut" role="img" aria-label="Focus time by subject: Math 35%, Science 25%, English 18%, History 12%, Other 10%.">
-            <div class="donut-center"><strong>38h 20m</strong><span>total focus</span></div>
+          <div class="donut" @keydown.esc="dismissSubjectTooltip">
+            <svg class="donut-chart" viewBox="0 0 150 150" role="group" aria-label="Focus time by subject">
+              <g
+                v-for="subject in subjectSlices"
+                :key="subject.name"
+                class="donut-slice"
+                :class="{ 'donut-slice--active': activeSubject?.name === subject.name }"
+                :style="{ '--slice-x': subject.liftX, '--slice-y': subject.liftY }"
+                tabindex="0" role="img"
+                :aria-label="`${subject.name}: ${subject.percent}%, ${subject.time} of focus time`"
+                :aria-describedby="activeSubject?.name === subject.name ? 'subject-tooltip' : undefined"
+                @pointerenter="hoveredSubject = subject"
+                @pointerleave="hoveredSubject = null"
+                @focus="focusedSubject = subject"
+                @blur="focusedSubject = null"
+              >
+                <!-- Keep the original area interactive while the visible slice lifts. -->
+                <path :d="subject.path" fill="transparent" aria-hidden="true" />
+                <path class="donut-slice-shape" :d="subject.path" :fill="subject.color" aria-hidden="true" />
+              </g>
+            </svg>
+            <div class="donut-center" aria-hidden="true"><strong>38h 20m</strong><span>total focus</span></div>
+            <div v-if="activeSubject" id="subject-tooltip" class="subject-tooltip" role="tooltip">
+              <strong>{{ activeSubject.name }}</strong>
+              <span>{{ activeSubject.time }} · {{ activeSubject.percent }}% of total</span>
+            </div>
           </div>
-          <ul class="subject-legend">
-            <li v-for="subject in subjects" :key="subject.name">
+          <ul class="subject-legend" aria-label="Subject percentages">
+            <li v-for="subject in subjects" :key="subject.name" :class="{ 'subject-legend__active': activeSubject?.name === subject.name }">
               <span class="subject-name"><i :style="{ background: subject.color }" aria-hidden="true"></i>{{ subject.name }}</span>
-              <span>{{ subject.percent }}%</span><span class="subject-time">{{ subject.time }}</span>
+              <span class="subject-percentage">{{ subject.percent }}%</span>
             </li>
           </ul>
         </div>
@@ -166,18 +221,35 @@ const goals = [
 .heatmap-legend .heatmap-cell { width: 11px; border-radius: 3px; }
 .streak-note { border-top: 1px solid var(--border); margin-top: 22px; padding-top: 16px; color: var(--accent); font-size: 12px; }
 .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-.subject-panel { grid-column: 1 / -1; }
-.subject-content { display: flex; align-items: center; justify-content: space-evenly; gap: 28px; margin-top: 22px; }
-.donut { width: 150px; height: 150px; flex-shrink: 0; border-radius: 50%; background: conic-gradient(#83a98c 0% 35%, #e99c78 35% 60%, #f1cf83 60% 78%, #afc6d8 78% 90%, #c9b9dc 90% 100%); display: grid; place-items: center; }
-.donut-center { width: 108px; height: 108px; border-radius: 50%; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.donut-center strong { font: 600 20px Georgia, serif; }
-.donut-center span { font-size: 11px; color: var(--text); margin-top: 4px; }
+.subject-panel { grid-column: 1 / -1; container-type: inline-size; }
+.subject-content { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-evenly; gap: 28px; margin-top: 22px; }
+.donut { position: relative; width: min(220px, 100%); aspect-ratio: 1; flex-shrink: 0; display: grid; place-items: center; }
+.donut-chart { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.donut-slice { pointer-events: visiblePainted; }
+.donut-slice-shape { transition: transform 180ms ease, filter 180ms ease; }
+.donut-slice--active .donut-slice-shape {
+  transform: translate(var(--slice-x), var(--slice-y));
+  filter: drop-shadow(0 2px 2px rgb(37 43 33 / 18%));
+}
+.donut-slice:focus-visible { outline: none; }
+.donut-slice:focus-visible .donut-slice-shape { stroke: var(--accent); stroke-width: 2; }
+@media (prefers-reduced-motion: reduce) {
+  .donut-slice-shape { transition: none; }
+}
+.donut-center { width: 72%; height: 72%; border-radius: 50%; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.subject-tooltip { position: absolute; top: 50%; left: calc(100% + 18px); transform: translateY(-50%); z-index: 2; width: 210px; padding: 16px 18px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgb(37 43 33 / 10%); pointer-events: none; font-size: 14px; }
+.subject-tooltip strong { display: block; color: var(--accent); font-size: 18px; margin-bottom: 6px; }
+.subject-tooltip span { color: var(--text); }
+.donut-center strong { font: 600 26px Georgia, serif; }
+.donut-center span { font-size: 12px; color: var(--text); margin-top: 4px; }
 .subject-legend, .goal-list { list-style: none; margin: 0; padding: 0; }
-.subject-legend { width: min(100%, 370px); }
-.subject-legend li { display: grid; grid-template-columns: 1fr 38px 70px; gap: 16px; align-items: center; padding: 6px 0; font-size: 12px; }
-.subject-name { display: flex; align-items: center; gap: 9px; }
-.subject-name i { width: 8px; height: 8px; border-radius: 50%; }
-.subject-time { text-align: right; color: var(--text); }
+.subject-legend { width: 100%; max-width: 240px; flex: 1 1 180px; }
+.subject-legend li { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding: 10px 0; font-size: 14px; }
+.subject-legend li + li { border-top: 1px solid #f0ede5; }
+.subject-name { display: flex; align-items: center; gap: 12px; font-weight: 400; }
+.subject-name i { width: 10px; height: 10px; flex-shrink: 0; border-radius: 3px; }
+.subject-percentage { color: var(--text); font: 600 14px/1.5 var(--sans); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.subject-legend__active .subject-name, .subject-legend__active .subject-percentage { color: var(--accent); }
 .goal-list { margin-top: 24px; }
 .goal-list li + li { margin-top: 22px; }
 .goal-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; margin-bottom: 8px; }
@@ -193,6 +265,9 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 8px; }
 .plant-status p { font-size: 14px; color: var(--text); }
 .plant-encouragement { background: var(--accent-bg); border-radius: 8px; margin-top: 14px; padding: 12px; font-size: 12px; color: var(--accent); }
 .plant-encouragement strong { display: block; margin-bottom: 2px; color: var(--accent); }
+@container (max-width: 520px) {
+  .subject-tooltip { top: auto; bottom: calc(100% + 14px); left: 50%; transform: translateX(-50%); }
+}
 @media (max-width: 1100px) {
   .page-heading { align-items: flex-start; flex-direction: column; }
   .summary-grid { gap: 12px; }
@@ -207,6 +282,7 @@ progress::-moz-progress-bar { background: var(--accent); border-radius: 8px; }
   .summary-card { padding: 18px 20px; }
   .stat-value { font-size: 32px; margin: 5px 0; }
   .subject-content { flex-direction: column; gap: 20px; }
+  .subject-legend { flex-basis: auto; }
   .bar-chart { gap: 8px; height: 210px; }
 }
 </style>
