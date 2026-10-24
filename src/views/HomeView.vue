@@ -6,7 +6,12 @@ const authStore = useAuthStore()
 
 <template>
   <section>
-    <h1>Welcome back{{ authStore.user ? `, ${authStore.user.email}` : '' }}</h1>
-    <p>Your week-ahead schedule view goes here.</p>
+    <p class="home-welcome">Welcome back{{ authStore.user ? `, ${authStore.user.email}` : '' }}</p>
   </section>
 </template>
+
+<style scoped>
+.home-welcome {
+  color: var(--shell-text-muted);
+}
+</style>

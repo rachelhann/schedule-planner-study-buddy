@@ -4,12 +4,12 @@ import { useAuthStore } from '../stores/auth'
 const routes = [
   { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { public: true } },
-  { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
-  { path: '/calendar', name: 'calendar', component: () => import('../views/CalendarView.vue') },
-  { path: '/focus', name: 'focus', component: () => import('../views/FocusSessionView.vue') },
-  { path: '/growth', name: 'growth', component: () => import('../views/GrowthView.vue') },
-  { path: '/stats', name: 'stats', component: () => import('../views/StatsView.vue') },
-  { path: '/notifications', name: 'notifications', component: () => import('../views/NotificationsView.vue') },
+  { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), meta: { title: 'Home' } },
+  { path: '/calendar', name: 'calendar', component: () => import('../views/CalendarView.vue'), meta: { title: 'Calendar' } },
+  { path: '/focus', name: 'focus', component: () => import('../views/FocusSessionView.vue'), meta: { title: 'Focus Session' } },
+  { path: '/growth', name: 'growth', component: () => import('../views/GrowthView.vue'), meta: { title: 'Growth' } },
+  { path: '/stats', name: 'stats', component: () => import('../views/StatsView.vue'), meta: { title: 'Stats' } },
+  { path: '/notifications', name: 'notifications', component: () => import('../views/NotificationsView.vue'), meta: { title: 'Notifications' } },
 ]
 
 const router = createRouter({
