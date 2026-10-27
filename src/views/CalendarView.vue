@@ -5,11 +5,20 @@ const days = ref([])
 
 const eventsByDate = {}
 
+const editingEvent = ref(null)
+const originalEvent = ref(null)
+
 function addEvent(date, message) {
   if (!eventsByDate[date]) {
     eventsByDate[date] = []
   }
   eventsByDate[date].push(message)
+}
+function saveEvent() {
+  Object.assign(originalEvent.value, editingEvent.value)
+
+  editingEvent.value = null
+  originalEvent.value = null
 }
 
 function removeEvent(date, index) {
@@ -53,17 +62,55 @@ function nextWeek(){
   updateWeek()
 }
 
+function timeToHours(time) {
+  const [hours, minutes] = time.split(':').map(Number)
+
+  return hours + minutes / 60
+}
+
+function eventClicked(event) {
+  originalEvent.value = event
+  editingEvent.value = { ...event }
+}
+
+function closePopup(){
+  editingEvent.value = null
+}
+
 addEvent(getDateKey(new Date()), {
   message: "Someone's birthday 🎂",
-  start: "00:00",
-  end: "12:00"
+  start: "03:10",
+  end: "08:00",
+  color: "lightblue"
+})
+addEvent(getDateKey(new Date()), {
+  message: "Someone's  🎂",
+  start: "02:00",
+  end: "03:15",
+  color: "green"
 })
 updateWeek()
 </script>
 
 <template>
   <div class="Calendar-page">
+    <div v-if="editingEvent" class="popup-background" @click="closePopup">
 
+      <div class="popup" @click.stop>
+
+        <input v-model="editingEvent.message">
+
+        <input v-model="editingEvent.start" type="time">
+
+        <input v-model="editingEvent.end" type="time">
+
+        <button @click="saveEvent">
+          Save
+        </button>
+
+      </div>
+
+    </div>
     <div class="calendar-header">
       <button @click="previousWeek()"> ← </button>
       <h2 class="Title">
@@ -94,7 +141,23 @@ updateWeek()
           </div>
 
           <div class="day-content">
+
             <div v-for="hour in 24" :key="hour" class="hour-slot"></div>
+
+            <div
+                v-for="event in eventsByDate[getDateKey(day)] || []"
+                :key="event.message"
+                class="event"
+                :style="{
+                  top: timeToHours(event.start) * 50 + 'px',
+                  height: (  timeToHours(event.end) -  timeToHours(event.start)) * 50 + 'px',
+                  backgroundColor: event.color
+                }"
+                @click="eventClicked(event)"
+            >
+              {{ event.message }}
+            </div>
+
           </div>
 
         </div>
@@ -114,14 +177,17 @@ updateWeek()
 
 .calendar-header button:first-child {
   justify-self: start;
+  cursor: pointer;
 }
 .Title {
   color: black;
   font-size: 24px;
+  user-select: none;
 }
 
 .calendar-header button:last-child {
   justify-self: end;
+  cursor: pointer;
 }
 .calendar-body {
   display: flex;
@@ -140,6 +206,7 @@ updateWeek()
   flex-shrink: 0;
   display: grid;
   grid-template-rows: repeat(25, 50px);
+  user-select: none;
 }
 .time {
   font-size: 12px;
@@ -157,13 +224,51 @@ updateWeek()
   text-align: center;
 }
 .day-content {
-  height: 1200px;
-  overflow: hidden;
+  position: relative;
+
   display: grid;
-  grid-template-rows: repeat(24,50px);
+  grid-template-rows: repeat(24, 50px);
 }
+
+.event {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 5px;
+  opacity: 90%;
+  cursor: pointer;
+}
+
 .hour-slot {
   border-top: 1px solid #ccc;
+}
+
+.popup-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+
+  background: rgba(0, 0, 0, 0.5);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  z-index: 1000;
+}
+
+.popup {
+  background: white;
+  padding: 25px;
+  border-radius: 10px;
+
+  width: 300px;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
 
 
