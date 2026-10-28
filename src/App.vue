@@ -1,19 +1,21 @@
 <script setup>
 import { computed } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
-const authStore = useAuthStore()
-const router = useRouter()
-const initial = computed(() => (authStore.user?.email?.charAt(0) || 'S').toUpperCase())
-const navigation = [
-  { to: '/', label: 'Home', icon: 'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9' },
-  { to: '/calendar', label: 'Calendar', icon: 'M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM7 3v4m10-4v4M3 11h18' },
-  { to: '/focus', label: 'Focus Session', icon: 'M12 8v5l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0' },
-  { to: '/growth', label: 'Growth', icon: 'M4 12c8 0 13-3 16-9 0 12-3 18-9 18-4 0-7-4-7-9Zm1 8 10-10' },
-  { to: '/stats', label: 'Stats', icon: 'M5 20v-8m7 8V5m7 15v-6' },
-  { to: '/notifications', label: 'Notifications', icon: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4' },
+const NAV_ITEMS = [
+  { name: 'home', label: 'Home', to: '/' },
+  { name: 'focus', label: 'Focus Session', to: '/focus' },
+  { name: 'growth', label: 'Growth', to: '/growth' },
+  { name: 'stats', label: 'Stats', to: '/stats' },
+  { name: 'notifications', label: 'Notifications', to: '/notifications' },
 ]
+
+const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+
+const userInitial = computed(() => authStore.user?.email?.[0]?.toUpperCase() ?? '?')
 
 async function handleSignOut() {
   await authStore.signOut()
@@ -22,63 +24,216 @@ async function handleSignOut() {
 </script>
 
 <template>
-  <div v-if="!authStore.loading" class="app-shell" :class="{ 'app-shell--signed-in': authStore.user }">
-    <aside v-if="authStore.user" class="app-sidebar">
-      <RouterLink to="/" class="app-brand" aria-label="Schedule Planner home">
-        <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 27C5 14 14 7 27 4 25 17 18 26 5 27Zm0 0L23 9" /></svg>
-        <span>Schedule<br />Planner</span>
-      </RouterLink>
-      <nav class="app-nav" aria-label="Main navigation">
-        <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="app-nav__link" exact-active-class="app-nav__link--active">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path :d="item.icon" /></svg>
-          <span>{{ item.label }}</span>
-        </RouterLink>
-      </nav>
-      <div class="app-account">
-        <span class="app-account__avatar" aria-hidden="true">{{ initial }}</span>
-        <div class="app-account__details">
-          <span class="app-account__email" :title="authStore.user.email">{{ authStore.user.email }}</span>
-          <button type="button" class="app-account__signout" @click="handleSignOut">Sign out</button>
+  <div v-if="!authStore.loading" class="app-shell">
+    <template v-if="authStore.user">
+      <aside class="app-sidebar">
+        <div class="app-sidebar__brand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M4 20c1-8 6-13 15-15-2 9-7 14-15 15Z" />
+            <path d="M4.5 19.5c2-5 5-9 10-12" />
+          </svg>
+          <span>Schedule<br />Planner</span>
         </div>
-      </div>
-    </aside>
-    <main class="app-main" :class="{ 'app-main--auth': !authStore.user }">
+
+        <nav class="app-sidebar__nav">
+          <RouterLink
+            v-for="item in NAV_ITEMS"
+            :key="item.name"
+            :to="item.to"
+            class="app-sidebar__nav-item"
+            :class="{ 'app-sidebar__nav-item--active': route.name === item.name }"
+          >
+            <svg v-if="item.name === 'home'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M3 10.5 12 3l9 7.5" />
+              <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
+            </svg>
+            <svg v-else-if="item.name === 'focus'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <svg v-else-if="item.name === 'growth'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M12 21c-5-1-8-5-8-10 7 0 11-2 16-9 0 9-3 16-8 19Z" />
+            </svg>
+            <svg v-else-if="item.name === 'stats'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M5 20V11M12 20V5M19 20v-7" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M6 9a6 6 0 1 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6Z" />
+              <path d="M10 19a2 2 0 0 0 4 0" />
+            </svg>
+            {{ item.label }}
+          </RouterLink>
+        </nav>
+
+        <div class="app-sidebar__user">
+          <span class="app-sidebar__avatar">{{ userInitial }}</span>
+          <span class="app-sidebar__email">{{ authStore.user?.email }}</span>
+          <button type="button" class="app-sidebar__signout" @click="handleSignOut">Sign out</button>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="app-main__header">
+          <h1>{{ route.meta.title }}</h1>
+        </header>
+        <RouterView />
+      </main>
+    </template>
+
+    <main v-else class="app-main app-main--auth">
       <RouterView />
     </main>
   </div>
 </template>
 
 <style scoped>
-.app-shell { min-height: 100svh; }
-.app-shell--signed-in { min-height: 100svh; display: grid; grid-template-columns: clamp(240px, 20vw, 320px) minmax(0, 1fr); }
-.app-sidebar { position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; gap: 48px; padding: 32px 24px 24px; border-right: 1px solid var(--border); overflow-y: auto; }
-.app-brand { display: flex; align-items: center; gap: 16px; color: var(--text-h); font: 700 28px/1.05 var(--heading); text-decoration: none; }
-.app-brand svg { width: 28px; height: 32px; flex-shrink: 0; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.app-nav { display: flex; flex-direction: column; gap: 8px; }
-.app-nav__link { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 12px; color: var(--text); text-decoration: none; font-size: 18px; }
-.app-nav__link svg { width: 22px; height: 22px; flex-shrink: 0; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.app-nav__link:hover { background: #e9ecdf; }
-.app-nav__link--active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
-.app-account { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; min-width: 0; }
-.app-account__avatar { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 600; }
-.app-account__details { min-width: 0; }
-.app-account__email { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.app-account__signout { background: transparent; border: 0; padding: 2px 0; color: var(--text); font-size: 12px; cursor: pointer; }
-.app-account__signout:hover { color: var(--accent); text-decoration: underline; }
+.app-shell {
+  --shell-bg: #f7f4ee;
+  --shell-card: #ffffff;
+  --shell-border: #e5ded3;
+  --shell-text: #22211f;
+  --shell-text-muted: #777064;
+  --shell-green: #3f704f;
+  --shell-green-soft: #e4ece3;
+  --shell-orange: #cc6938;
+  --shell-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
 
-.app-main { min-width: 0; padding: clamp(24px, 3vw, 48px); }
-@media (max-width: 1000px) and (min-width: 701px) {
-  .app-shell--signed-in { grid-template-columns: 220px minmax(0, 1fr); }
-  .app-sidebar { padding: 28px 16px 20px; }
-  .app-nav__link { padding: 12px; gap: 12px; font-size: 16px; }
-}
-@media (max-width: 700px) {
-  .app-shell--signed-in { display: flex; flex-direction: column; }
-  .app-sidebar { position: static; height: auto; gap: 20px; border-right: 0; border-bottom: 1px solid var(--border); }
-  .app-nav { flex-direction: row; overflow-x: auto; }
-  .app-nav__link { flex-shrink: 0; padding: 10px; gap: 8px; font-size: 14px; }
-  .app-account { margin-top: 0; }
+  min-height: 100vh;
+  display: flex;
+  background: var(--shell-bg);
+  color: var(--shell-text);
 }
 
-.app-main--auth { min-height: 100svh; }
+.app-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem 1.25rem;
+  border-right: 1px solid var(--shell-border);
+}
+
+.app-sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--shell-serif);
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.15;
+  margin-bottom: 2rem;
+}
+
+.app-sidebar__brand svg {
+  width: 24px;
+  height: 24px;
+  color: var(--shell-green);
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.app-sidebar__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  color: var(--shell-text-muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.app-sidebar__nav-item svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.app-sidebar__nav-item--active {
+  background: var(--shell-green-soft);
+  color: var(--shell-green);
+  font-weight: 600;
+}
+
+.app-sidebar__user {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--shell-border);
+}
+
+.app-sidebar__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--shell-green);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.app-sidebar__email {
+  font-size: 0.8rem;
+  color: var(--shell-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-sidebar__signout {
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.4rem 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--shell-text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.app-sidebar__signout:hover {
+  color: var(--shell-text);
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  padding: 2.5rem 2rem;
+}
+
+.app-main--auth {
+  padding: 0;
+}
+
+.app-main__header h1 {
+  font-family: var(--shell-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 1.5rem;
+  color: var(--shell-text);
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    flex-direction: column;
+  }
+  .app-sidebar {
+    width: auto;
+  }
+}
 </style>
