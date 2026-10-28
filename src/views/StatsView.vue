@@ -217,12 +217,32 @@ const goals = [
   --subject-other: color-mix(in srgb, var(--shell-text-muted) 45%, var(--shell-card));
 
   width: 100%;
+  color: var(--shell-text);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  color-scheme: light;
 }
-.stats-page h1, .stats-page h2, .stats-page h3 { color: var(--shell-text); }
-.page-heading h1 { font-family: var(--shell-serif); font-size: 2rem; letter-spacing: normal; }
-.panel { background: var(--shell-card); border-color: var(--shell-border); }
+/* Keep layout portable when copied; theme variables come from the app shell or shared stylesheet. */
+.stats-page, .stats-page *, .stats-page *::before, .stats-page *::after { box-sizing: border-box; }
+.stats-page :where(h1, h2, h3) { color: var(--shell-text); }
+.stats-page :where(h2) { font-family: inherit; font-size: 18px; font-weight: 600; line-height: 1.4; letter-spacing: normal; margin: 0; }
+:where(.stats-page) p { margin: 0; }
+.stats-page :focus-visible { outline: 2px solid var(--shell-green); outline-offset: 4px; }
+.page-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 36px; }
+.page-heading h1 { font-family: var(--shell-serif); font-size: 2rem; font-weight: 700; line-height: 1.1; letter-spacing: normal; margin: 0 0 6px; }
+.page-heading p { font-size: 18px; }
+.panel {
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
+  border-radius: 22px;
+  padding: 28px;
+  min-width: 0;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
 @media (hover: hover) {
   .panel:hover {
+    transform: translateY(-3px);
     border-color: var(--shell-green-soft);
     box-shadow: 0 6px 18px color-mix(in srgb, var(--shell-text) 7%, transparent);
   }
@@ -252,6 +272,8 @@ const goals = [
 .bar-column:first-child .bar-tooltip { left: 0; transform: none; }
 .bar-column:last-child .bar-tooltip { left: auto; right: 0; transform: none; }
 @media (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
+  .panel:hover { transform: none; }
   .bar { transition: none; }
   .bar-shell--active .bar { transform: none; }
 }
