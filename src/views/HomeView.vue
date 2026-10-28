@@ -6,10 +6,22 @@ const authStore = useAuthStore()
 
 const currentDate = ref(new Date()) //Today's date
 const days = ref([])
+const colors = [
+  "lightblue",
+  "lightgreen",
+  "lightcoral",
+  "plum",
+  "lightyellow"
+]
 
 const eventsByDate = {}
 
+const popupMode = ref(null)
+
 const editingEvent = ref(null)
+const editingDate = ref(null)
+const editingIndex = ref(null)
+
 const originalEvent = ref(null)
 
 function addEvent(date, message) {
@@ -18,18 +30,63 @@ function addEvent(date, message) {
   }
   eventsByDate[date].push(message)
 }
+
+function createEvent() {
+  addEvent(editingDate.value, {
+    message: editingEvent.value.message,
+    start: editingEvent.value.start,
+    end: editingEvent.value.end,
+    color: editingEvent.value.color
+  })
+
+  closePopup()
+}
+
 function saveEvent() {
   Object.assign(originalEvent.value, editingEvent.value)
 
   editingEvent.value = null
   originalEvent.value = null
+  editingDate.value = null
+  editingIndex.value = null
 }
 
-function removeEvent(date, index) {
-  if (!eventsByDate[date]) return
-  eventsByDate[date].splice(index, 1)
-  if (eventsByDate[date].length === 0) {
-    delete eventsByDate[date]
+function addEventPopup(day, hour) {
+  popupMode.value = "create"
+
+  editingEvent.value = {
+    message: "",
+    start: `${String(hour).padStart(2, '0')}:00`,
+    end: `${String(hour + 1).padStart(2, '0')}:00`,
+    color: "green"
+  }
+
+  editingDate.value = getDateKey(day)
+}
+
+function removeEvent() {
+  eventsByDate[editingDate.value].splice(editingIndex.value, 1)
+
+  if (eventsByDate[editingDate.value].length === 0) {
+    delete eventsByDate[editingDate.value]
+  }
+
+  editingEvent.value = null
+  originalEvent.value = null
+  editingDate.value = null
+  editingIndex.value = null
+}
+
+function openNewEvent() {
+  popupMode.value = "create"
+
+  editingDate.value = getDateKey(new Date())
+
+  editingEvent.value = {
+    message: "",
+    start: "09:00",
+    end: "10:00",
+    color: "lightblue"
   }
 }
 
@@ -66,33 +123,33 @@ function nextWeek(){
   updateWeek()
 }
 
-function timeToHours(time) {
+function timeToHours(time, isEnd = false) {
   const [hours, minutes] = time.split(':').map(Number)
+
+  if (isEnd && hours === 0 && minutes === 0) {
+    return 24
+  }
 
   return hours + minutes / 60
 }
 
-function eventClicked(event) {
-  originalEvent.value = event
+function eventClicked(event, date, index) {
+  popupMode.value = "edit"
+
   editingEvent.value = { ...event }
+  originalEvent.value = event
+
+  editingDate.value = date
+  editingIndex.value = index
 }
 
 function closePopup(){
   editingEvent.value = null
+  originalEvent.value = null
+  editingDate.value = null
+  editingIndex.value = null
 }
 
-addEvent(getDateKey(new Date()), {
-  message: "Someone's birthday 🎂",
-  start: "03:10",
-  end: "08:00",
-  color: "lightblue"
-})
-addEvent(getDateKey(new Date()), {
-  message: "Someone's  🎂",
-  start: "02:00",
-  end: "03:15",
-  color: "green"
-})
 updateWeek()
 </script>
 
@@ -111,8 +168,30 @@ updateWeek()
 
           <input v-model="editingEvent.end" type="time">
 
-          <button @click="saveEvent">
+          <label>
+            Event date:
+            <input
+                type="date"
+                v-model="editingDate"
+            >
+          </label>
+
+          <div class="color-options">
+            <button
+                v-for="color in colors"
+                :key="color"
+                :style="{ backgroundColor: color }"
+                @click="editingEvent.color = color"
+            >
+            </button>
+          </div>
+
+          <button @click="popupMode === 'edit' ? saveEvent() : createEvent()">
             Save
+          </button>
+
+          <button v-if="popupMode === 'edit'" @click="removeEvent()">
+            Delete
           </button>
 
         </div>
@@ -127,7 +206,10 @@ updateWeek()
             days[6].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
           }}
         </h2>
-        <button @click="nextWeek()"> → </button>
+        <div class="header-right">
+          <button @click="openNewEvent">+ Add Event</button>
+          <button @click="nextWeek()"> → </button>
+        </div>
       </div>
 
 
@@ -149,18 +231,24 @@ updateWeek()
 
             <div class="day-content">
 
-              <div v-for="hour in 24" :key="hour" class="hour-slot"></div>
+              <div
+                  v-for="hour in 24"
+                  :key="hour"
+                  class="hour-slot"
+                  @click="addEventPopup(day, hour)"
+              >
+              </div>
 
               <div
-                  v-for="event in eventsByDate[getDateKey(day)] || []"
-                  :key="event.message"
+                  v-for="(event, index) in eventsByDate[getDateKey(day)] || []"
+                  :key="index"
                   class="event"
                   :style="{
                     top: timeToHours(event.start) * 50 + 'px',
-                    height: (  timeToHours(event.end) -  timeToHours(event.start)) * 50 + 'px',
+                    height: (  timeToHours(event.end, true) -  timeToHours(event.start)) * 50 + 'px',
                     backgroundColor: event.color
                   }"
-                  @click="eventClicked(event)"
+                  @click="eventClicked(event, getDateKey(day), index)"
               >
                 {{ event.message }}
               </div>
@@ -282,4 +370,26 @@ updateWeek()
 
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
+
+.color-options {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.color-options button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #999;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.header-right {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
 </style>
