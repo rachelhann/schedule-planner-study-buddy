@@ -5,7 +5,6 @@ import { useAuthStore } from './stores/auth'
 
 const NAV_ITEMS = [
   { name: 'home', label: 'Home', to: '/' },
-  { name: 'calendar', label: 'Calendar', to: '/calendar' },
   { name: 'focus', label: 'Focus Session', to: '/focus' },
   { name: 'growth', label: 'Growth', to: '/growth' },
   { name: 'stats', label: 'Stats', to: '/stats' },
@@ -47,10 +46,6 @@ async function handleSignOut() {
             <svg v-if="item.name === 'home'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               <path d="M3 10.5 12 3l9 7.5" />
               <path d="M5 9.5V21h5v-6h4v6h5V9.5" />
-            </svg>
-            <svg v-else-if="item.name === 'calendar'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-              <rect x="3" y="5" width="18" height="16" rx="2" />
-              <path d="M3 10h18M8 3v4M16 3v4" />
             </svg>
             <svg v-else-if="item.name === 'focus'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               <circle cx="12" cy="12" r="9" />
