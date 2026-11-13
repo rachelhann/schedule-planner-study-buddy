@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
@@ -11,6 +11,29 @@ const eventsByDate = {}
 
 const editingEvent = ref(null)
 const originalEvent = ref(null)
+
+const startHour = ref(1)
+const endHour = ref(23)
+
+const visibleHours = computed(() => {
+  const hours = []
+  for (let hour = startHour.value; hour <= endHour.value; hour++) {
+    hours.push(hour)
+  }
+  return hours
+})
+
+function onStartHourChange() {
+  if (startHour.value >= endHour.value) {
+    endHour.value = Math.min(23, startHour.value + 1)
+  }
+}
+
+function onEndHourChange() {
+  if (endHour.value <= startHour.value) {
+    startHour.value = Math.max(0, endHour.value - 1)
+  }
+}
 
 function addEvent(date, message) {
   if (!eventsByDate[date]) {
@@ -66,6 +89,12 @@ function nextWeek(){
   updateWeek()
 }
 
+function formatHourLabel(hour) {
+  const period = hour < 12 ? 'AM' : 'PM'
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12
+  return `${displayHour} ${period}`
+}
+
 function timeToHours(time) {
   const [hours, minutes] = time.split(':').map(Number)
 
@@ -85,13 +114,13 @@ addEvent(getDateKey(new Date()), {
   message: "Someone's birthday 🎂",
   start: "03:10",
   end: "08:00",
-  color: "lightblue"
+  color: "green"
 })
 addEvent(getDateKey(new Date()), {
   message: "Someone's  🎂",
   start: "02:00",
   end: "03:15",
-  color: "green"
+  color: "orange"
 })
 updateWeek()
 </script>
@@ -100,7 +129,7 @@ updateWeek()
   <section>
     <p class="home-welcome">Welcome back{{ authStore.user ? `, ${authStore.user.email}` : '' }}</p>
 
-    <div class="Calendar-page">
+    <div class="calendar-card">
       <div v-if="editingEvent" class="popup-background" @click="closePopup">
 
         <div class="popup" @click.stop>
@@ -111,7 +140,7 @@ updateWeek()
 
           <input v-model="editingEvent.end" type="time">
 
-          <button @click="saveEvent">
+          <button class="popup-save" @click="saveEvent">
             Save
           </button>
 
@@ -119,23 +148,37 @@ updateWeek()
 
       </div>
       <div class="calendar-header">
-        <button @click="previousWeek()"> ← </button>
-        <h2 class="Title">
+        <button class="calendar-nav" @click="previousWeek()"> ← </button>
+        <h2 class="calendar-title">
           {{ days[0].getMonth() === days[6].getMonth()
             ? days[0].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
             : days[0].toLocaleDateString('en-US', { month: 'long' }) + ' - ' +
             days[6].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
           }}
         </h2>
-        <button @click="nextWeek()"> → </button>
+        <button class="calendar-nav" @click="nextWeek()"> → </button>
       </div>
 
+      <div class="hour-range-picker">
+        <label>
+          From
+          <select v-model.number="startHour" @change="onStartHourChange">
+            <option v-for="hour in 24" :key="hour - 1" :value="hour - 1">{{ formatHourLabel(hour - 1) }}</option>
+          </select>
+        </label>
+        <label>
+          To
+          <select v-model.number="endHour" @change="onEndHourChange">
+            <option v-for="hour in 24" :key="hour - 1" :value="hour - 1">{{ formatHourLabel(hour - 1) }}</option>
+          </select>
+        </label>
+      </div>
 
       <div class="calendar-body">
 
-        <div class="time-bar">
-          <div v-for="hour in 23" :key="hour" class="time">
-            {{ String(hour).padStart(2, '0') }}:00
+        <div class="time-bar" :style="{ gridTemplateRows: `repeat(${visibleHours.length}, 50px)` }">
+          <div v-for="hour in visibleHours" :key="hour" class="time">
+            {{ formatHourLabel(hour) }}
           </div>
         </div>
 
@@ -147,18 +190,18 @@ updateWeek()
               {{day.toLocaleDateString('en-US', {day: 'numeric' }) }}
             </div>
 
-            <div class="day-content">
+            <div class="day-content" :style="{ gridTemplateRows: `repeat(${visibleHours.length}, 50px)` }">
 
-              <div v-for="hour in 24" :key="hour" class="hour-slot"></div>
+              <div v-for="hour in visibleHours" :key="hour" class="hour-slot"></div>
 
               <div
                   v-for="event in eventsByDate[getDateKey(day)] || []"
                   :key="event.message"
                   class="event"
+                  :class="`event-${event.color}`"
                   :style="{
-                    top: timeToHours(event.start) * 50 + 'px',
-                    height: (  timeToHours(event.end) -  timeToHours(event.start)) * 50 + 'px',
-                    backgroundColor: event.color
+                    top: (timeToHours(event.start) - startHour) * 50 + 'px',
+                    height: (  timeToHours(event.end) -  timeToHours(event.start)) * 50 + 'px'
                   }"
                   @click="eventClicked(event)"
               >
@@ -179,28 +222,58 @@ updateWeek()
 <style scoped>
 .home-welcome {
   color: var(--shell-text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.calendar-card {
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
+  border-radius: 22px;
+  padding: 28px;
 }
 
 .calendar-header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  margin-bottom: 20px;
 }
 
-.calendar-header button:first-child {
+.calendar-nav {
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: var(--shell-card);
+  color: var(--shell-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.calendar-nav:hover {
+  color: var(--shell-green);
+  border-color: var(--shell-green-soft);
+}
+
+.calendar-header .calendar-nav:first-child {
   justify-self: start;
-  cursor: pointer;
-}
-.Title {
-  color: black;
-  font-size: 24px;
-  user-select: none;
 }
 
-.calendar-header button:last-child {
+.calendar-header .calendar-nav:last-child {
   justify-self: end;
-  cursor: pointer;
 }
+
+.calendar-title {
+  font-family: var(--shell-serif);
+  font-weight: 700;
+  color: var(--shell-text);
+  font-size: 1.3rem;
+  user-select: none;
+  margin: 0;
+}
+
 .calendar-body {
   display: flex;
   align-items: stretch;
@@ -210,6 +283,32 @@ updateWeek()
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   align-items: start;
+  gap: 8px;
+}
+
+.hour-range-picker {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.hour-range-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--shell-text-muted);
+}
+
+.hour-range-picker select {
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--shell-text);
+  background: var(--shell-card);
+  cursor: pointer;
 }
 
 .time-bar {
@@ -217,44 +316,87 @@ updateWeek()
   width: 55px;
   flex-shrink: 0;
   display: grid;
-  grid-template-rows: repeat(25, 50px);
   user-select: none;
 }
 .time {
   font-size: 12px;
+  color: var(--shell-text-muted);
 }
 
 
 .day {
-  border: 1px solid black;
+  border: 1px solid var(--shell-border);
+  border-radius: 12px;
+  overflow: hidden;
   min-height: 0;
 }
 
 .day-name {
-  font-weight: bold;
+  font-weight: 600;
+  color: var(--shell-text-muted);
   padding: 10px;
   text-align: center;
+  background: var(--shell-bg);
+  border-bottom: 1px solid var(--shell-border);
 }
 .day-content {
   position: relative;
 
   display: grid;
-  grid-template-rows: repeat(24, 50px);
+  overflow: hidden;
 }
 
 .event {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 4px;
+  right: 4px;
   box-sizing: border-box;
-  padding: 5px;
-  border-radius: 5px;
-  opacity: 90%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--event-hue) 55%, transparent);
+  background: color-mix(in srgb, var(--event-hue) 32%, transparent);
+  color: var(--event-hue);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--shell-text) 15%, transparent);
+}
+
+.event-green {
+  --event-hue: #16a34a;
+}
+
+.event-orange {
+  --event-hue: #ea580c;
+}
+
+.event-pink {
+  --event-hue: #db2777;
+}
+
+.event-lavender {
+  --event-hue: #7c3aed;
+}
+
+.event-mint {
+  --event-hue: #0d9488;
+}
+
+.event-yellow {
+  --event-hue: #d97706;
+}
+
+.event-sky {
+  --event-hue: #0284c7;
 }
 
 .hour-slot {
-  border-top: 1px solid #ccc;
+  border-top: 1px solid var(--shell-border);
 }
 
 .popup-background {
@@ -274,12 +416,40 @@ updateWeek()
 }
 
 .popup {
-  background: white;
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
   padding: 25px;
-  border-radius: 10px;
+  border-radius: 16px;
 
   width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--shell-text) 20%, transparent);
+}
+
+.popup input {
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--shell-text);
+  background: var(--shell-bg);
+}
+
+.popup-save {
+  margin-top: 4px;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--shell-green);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popup-save:hover {
+  background: color-mix(in srgb, var(--shell-green) 85%, black);
 }
 </style>
