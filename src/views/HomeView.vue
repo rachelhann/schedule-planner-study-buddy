@@ -1,16 +1,18 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
 
-const currentDate = ref(new Date()) //Today's date
+const currentDate = ref(new Date())
 const days = ref([])
 
-const eventsByDate = {}
+const eventsByDate = reactive({})
 
 const editingEvent = ref(null)
 const originalEvent = ref(null)
+
+const colorOptions = ['green', 'orange', 'pink', 'lavender', 'mint', 'yellow', 'sky']
 
 const startHour = ref(1)
 const endHour = ref(23)
@@ -35,14 +37,19 @@ function onEndHourChange() {
   }
 }
 
-function addEvent(date, message) {
+function addEvent(date, eventData) {
   if (!eventsByDate[date]) {
     eventsByDate[date] = []
   }
-  eventsByDate[date].push(message)
+  eventsByDate[date].push({ id: crypto.randomUUID(), ...eventData })
 }
 function saveEvent() {
-  Object.assign(originalEvent.value, editingEvent.value)
+  if (originalEvent.value) {
+    Object.assign(originalEvent.value, editingEvent.value)
+  } else {
+    const { dateKey, ...eventData } = editingEvent.value
+    addEvent(dateKey, eventData)
+  }
 
   editingEvent.value = null
   originalEvent.value = null
@@ -64,7 +71,7 @@ function getDateKey(date) {
   return `${year}-${month}-${day}`
 }
 
-function updateWeek(){
+function updateWeek() {
   const date = new Date(currentDate.value)
 
   const dayOfWeek = date.getDay()
@@ -80,11 +87,11 @@ function updateWeek(){
   }
 }
 
-function previousWeek(){
+function previousWeek() {
   currentDate.value.setDate(currentDate.value.getDate() - 7)
   updateWeek()
 }
-function nextWeek(){
+function nextWeek() {
   currentDate.value.setDate(currentDate.value.getDate() + 7)
   updateWeek()
 }
@@ -106,8 +113,42 @@ function eventClicked(event) {
   editingEvent.value = { ...event }
 }
 
-function closePopup(){
+function openNewEvent(day, hour) {
+  const endHourValue = Math.min(hour + 1, 23)
+  originalEvent.value = null
+  editingEvent.value = {
+    dateKey: getDateKey(day),
+    message: '',
+    start: `${String(hour).padStart(2, '0')}:00`,
+    end: `${String(endHourValue).padStart(2, '0')}:00`,
+    color: 'sky'
+  }
+}
+
+function openNewEventDefault() {
+  const today = new Date()
+  const todayInView = days.value.find((day) => getDateKey(day) === getDateKey(today))
+  openNewEvent(todayInView ?? days.value[0], today.getHours())
+}
+
+function closePopup() {
   editingEvent.value = null
+  originalEvent.value = null
+}
+
+function deleteEvent() {
+  if (!originalEvent.value) return
+
+  for (const dateKey of Object.keys(eventsByDate)) {
+    const index = eventsByDate[dateKey].indexOf(originalEvent.value)
+    if (index !== -1) {
+      removeEvent(dateKey, index)
+      break
+    }
+  }
+
+  editingEvent.value = null
+  originalEvent.value = null
 }
 
 addEvent(getDateKey(new Date()), {
@@ -134,29 +175,50 @@ updateWeek()
 
         <div class="popup" @click.stop>
 
-          <input v-model="editingEvent.message">
+          <input v-model="editingEvent.message" placeholder="Add a title">
 
           <input v-model="editingEvent.start" type="time">
 
           <input v-model="editingEvent.end" type="time">
 
-          <button class="popup-save" @click="saveEvent">
-            Save
-          </button>
+          <div class="color-picker">
+            <button
+                v-for="colorOption in colorOptions"
+                :key="colorOption"
+                type="button"
+                class="color-swatch"
+                :class="[`event-${colorOption}`, { 'color-swatch--active': editingEvent.color === colorOption }]"
+                :aria-label="colorOption"
+                @click="editingEvent.color = colorOption"
+            ></button>
+          </div>
+
+          <div class="popup-actions">
+            <button class="popup-save" @click="saveEvent">
+              Save
+            </button>
+
+            <button v-if="originalEvent" class="popup-delete" type="button" @click="deleteEvent">
+              Delete
+            </button>
+          </div>
 
         </div>
 
       </div>
       <div class="calendar-header">
-        <button class="calendar-nav" @click="previousWeek()"> ← </button>
-        <h2 class="calendar-title">
-          {{ days[0].getMonth() === days[6].getMonth()
-            ? days[0].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            : days[0].toLocaleDateString('en-US', { month: 'long' }) + ' - ' +
-            days[6].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-          }}
-        </h2>
-        <button class="calendar-nav" @click="nextWeek()"> → </button>
+        <div class="calendar-nav-group">
+          <button class="calendar-nav" @click="previousWeek()"> &lt; </button>
+          <h2 class="calendar-title">
+            {{ days[0].getMonth() === days[6].getMonth()
+              ? days[0].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+              : days[0].toLocaleDateString('en-US', { month: 'long' }) + ' - ' +
+              days[6].toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            }}
+          </h2>
+          <button class="calendar-nav" @click="nextWeek()"> &gt; </button>
+        </div>
+        <button class="new-task-btn" @click="openNewEventDefault()">+ New Task</button>
       </div>
 
       <div class="hour-range-picker">
@@ -192,16 +254,21 @@ updateWeek()
 
             <div class="day-content" :style="{ gridTemplateRows: `repeat(${visibleHours.length}, 50px)` }">
 
-              <div v-for="hour in visibleHours" :key="hour" class="hour-slot"></div>
+              <div
+                  v-for="hour in visibleHours"
+                  :key="hour"
+                  class="hour-slot"
+                  @click="openNewEvent(day, hour)"
+              ></div>
 
               <div
                   v-for="event in eventsByDate[getDateKey(day)] || []"
-                  :key="event.message"
+                  :key="event.id"
                   class="event"
                   :class="`event-${event.color}`"
                   :style="{
                     top: (timeToHours(event.start) - startHour) * 50 + 'px',
-                    height: (  timeToHours(event.end) -  timeToHours(event.start)) * 50 + 'px'
+                    height: (timeToHours(event.end) - timeToHours(event.start)) * 50 + 'px'
                   }"
                   @click="eventClicked(event)"
               >
@@ -233,10 +300,34 @@ updateWeek()
 }
 
 .calendar-header {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  gap: 16px;
   margin-bottom: 20px;
+}
+
+.calendar-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.new-task-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 22px;
+  background: var(--shell-green);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.new-task-btn:hover {
+  background: color-mix(in srgb, var(--shell-green) 85%, black);
 }
 
 .calendar-nav {
@@ -257,14 +348,6 @@ updateWeek()
   border-color: var(--shell-green-soft);
 }
 
-.calendar-header .calendar-nav:first-child {
-  justify-self: start;
-}
-
-.calendar-header .calendar-nav:last-child {
-  justify-self: end;
-}
-
 .calendar-title {
   font-family: var(--shell-serif);
   font-weight: 700;
@@ -278,6 +361,7 @@ updateWeek()
   display: flex;
   align-items: stretch;
 }
+
 .week {
   flex: 1;
   display: grid;
@@ -318,11 +402,11 @@ updateWeek()
   display: grid;
   user-select: none;
 }
+
 .time {
   font-size: 12px;
   color: var(--shell-text-muted);
 }
-
 
 .day {
   border: 1px solid var(--shell-border);
@@ -339,6 +423,7 @@ updateWeek()
   background: var(--shell-bg);
   border-bottom: 1px solid var(--shell-border);
 }
+
 .day-content {
   position: relative;
 
@@ -368,35 +453,41 @@ updateWeek()
 }
 
 .event-green {
-  --event-hue: #16a34a;
+  --event-hue: #22c55e;
 }
 
 .event-orange {
-  --event-hue: #ea580c;
+  --event-hue: #f97316;
 }
 
 .event-pink {
-  --event-hue: #db2777;
+  --event-hue: #ec4899;
 }
 
 .event-lavender {
-  --event-hue: #7c3aed;
+  --event-hue: #8b5cf6;
 }
 
 .event-mint {
-  --event-hue: #0d9488;
+  --event-hue: #14b8a6;
 }
 
 .event-yellow {
-  --event-hue: #d97706;
+  --event-hue: #f59e0b;
 }
 
 .event-sky {
-  --event-hue: #0284c7;
+  --event-hue: #0ea5e9;
 }
 
 .hour-slot {
   border-top: 1px solid var(--shell-border);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.hour-slot:hover {
+  background: var(--shell-green-soft);
 }
 
 .popup-background {
@@ -438,8 +529,39 @@ updateWeek()
   background: var(--shell-bg);
 }
 
-.popup-save {
+.color-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  background: var(--event-hue);
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch--active {
+  box-shadow: 0 0 0 2px var(--shell-card), 0 0 0 4px var(--event-hue);
+}
+
+.popup-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 4px;
+}
+
+.popup-save {
+  flex: 1;
   border: none;
   border-radius: 8px;
   padding: 10px;
@@ -451,5 +573,20 @@ updateWeek()
 
 .popup-save:hover {
   background: color-mix(in srgb, var(--shell-green) 85%, black);
+}
+
+.popup-delete {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popup-delete:hover {
+  background: color-mix(in srgb, #dc2626 85%, black);
 }
 </style>
