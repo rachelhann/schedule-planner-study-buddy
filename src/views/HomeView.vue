@@ -108,7 +108,65 @@ function timeToHours(time) {
   return hours + minutes / 60
 }
 
+function hoursToTime(hours) {
+  const wholeHours = Math.floor(hours)
+  const minutes = Math.round((hours - wholeHours) * 60)
+
+  return `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+const dragState = ref(null)
+const draggingEvent = ref(null)
+const justDragged = ref(false)
+
+function startEventDrag(event, pointerEvent) {
+  dragState.value = {
+    event,
+    startClientY: pointerEvent.clientY,
+    originalStart: timeToHours(event.start),
+    duration: timeToHours(event.end) - timeToHours(event.start),
+    moved: false
+  }
+  draggingEvent.value = event
+
+  window.addEventListener('pointermove', onEventDragMove)
+  window.addEventListener('pointerup', onEventDragEnd)
+}
+
+function onEventDragMove(pointerEvent) {
+  if (!dragState.value) return
+
+  const deltaPx = pointerEvent.clientY - dragState.value.startClientY
+  if (Math.abs(deltaPx) > 3) {
+    dragState.value.moved = true
+  }
+
+  const snappedDeltaHours = Math.round((deltaPx / 50) * 4) / 4
+  const maxStart = Math.max(0, 24 - dragState.value.duration)
+  const newStart = Math.max(0, Math.min(maxStart, dragState.value.originalStart + snappedDeltaHours))
+
+  dragState.value.event.start = hoursToTime(newStart)
+  dragState.value.event.end = hoursToTime(newStart + dragState.value.duration)
+}
+
+function onEventDragEnd() {
+  window.removeEventListener('pointermove', onEventDragMove)
+  window.removeEventListener('pointerup', onEventDragEnd)
+
+  if (dragState.value?.moved) {
+    justDragged.value = true
+  }
+
+  dragState.value = null
+  draggingEvent.value = null
+}
+
 function eventClicked(event) {
+  if (justDragged.value) {
+    justDragged.value = false
+    return
+  }
+
   originalEvent.value = event
   editingEvent.value = { ...event }
 }
@@ -152,16 +210,10 @@ function deleteEvent() {
 }
 
 addEvent(getDateKey(new Date()), {
-  message: "Someone's birthday 🎂",
-  start: "03:10",
-  end: "08:00",
-  color: "green"
-})
-addEvent(getDateKey(new Date()), {
-  message: "Someone's  🎂",
+  message: "COMP 322 Midterm",
   start: "02:00",
-  end: "03:15",
-  color: "orange"
+  end: "05:15",
+  color: "pink"
 })
 updateWeek()
 </script>
@@ -265,11 +317,12 @@ updateWeek()
                   v-for="event in eventsByDate[getDateKey(day)] || []"
                   :key="event.id"
                   class="event"
-                  :class="`event-${event.color}`"
+                  :class="[`event-${event.color}`, { 'event--dragging': draggingEvent === event }]"
                   :style="{
                     top: (timeToHours(event.start) - startHour) * 50 + 'px',
                     height: (timeToHours(event.end) - timeToHours(event.start)) * 50 + 'px'
                   }"
+                  @pointerdown="startEventDrag(event, $event)"
                   @click="eventClicked(event)"
               >
                 {{ event.message }}
@@ -443,13 +496,22 @@ updateWeek()
   color: var(--event-hue);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
 .event:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px color-mix(in srgb, var(--shell-text) 15%, transparent);
+}
+
+.event--dragging {
+  cursor: grabbing;
+  z-index: 1;
+  transition: none;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--shell-text) 25%, transparent);
 }
 
 .event-green {
