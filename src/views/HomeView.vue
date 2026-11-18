@@ -1,6 +1,7 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { fetchEvents, createEvent, updateEvent, deleteEvent as deleteEventRow } from '../lib/eventsApi'
 
 const authStore = useAuthStore()
 
@@ -8,6 +9,8 @@ const currentDate = ref(new Date())
 const days = ref([])
 
 const eventsByDate = reactive({})
+const saveError = ref('')
+const isSaving = ref(false)
 
 const editingEvent = ref(null)
 const originalEvent = ref(null)
@@ -37,29 +40,23 @@ function onEndHourChange() {
   }
 }
 
-function addEvent(date, eventData) {
-  if (!eventsByDate[date]) {
-    eventsByDate[date] = []
+function addLocalEvent(event) {
+  if (!eventsByDate[event.dateKey]) {
+    eventsByDate[event.dateKey] = []
   }
-  eventsByDate[date].push({ id: crypto.randomUUID(), ...eventData })
-}
-function saveEvent() {
-  if (originalEvent.value) {
-    Object.assign(originalEvent.value, editingEvent.value)
-  } else {
-    const { dateKey, ...eventData } = editingEvent.value
-    addEvent(dateKey, eventData)
-  }
-
-  editingEvent.value = null
-  originalEvent.value = null
+  eventsByDate[event.dateKey].push(event)
 }
 
-function removeEvent(date, index) {
-  if (!eventsByDate[date]) return
-  eventsByDate[date].splice(index, 1)
-  if (eventsByDate[date].length === 0) {
-    delete eventsByDate[date]
+function removeLocalEvent(event) {
+  const bucket = eventsByDate[event.dateKey]
+  if (!bucket) return
+
+  const index = bucket.indexOf(event)
+  if (index === -1) return
+
+  bucket.splice(index, 1)
+  if (bucket.length === 0) {
+    delete eventsByDate[event.dateKey]
   }
 }
 
@@ -69,6 +66,67 @@ function getDateKey(date) {
   const day = String(date.getDate()).padStart(2, '0')
 
   return `${year}-${month}-${day}`
+}
+
+function toDateTime(dateKey, time) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const [hours, minutes] = time.split(':').map(Number)
+
+  return new Date(year, month - 1, day, hours, minutes)
+}
+
+function toDbPayload(localEvent) {
+  return {
+    title: localEvent.message,
+    starts_at: toDateTime(localEvent.dateKey, localEvent.start).toISOString(),
+    ends_at: toDateTime(localEvent.dateKey, localEvent.end).toISOString(),
+    color: localEvent.color
+  }
+}
+
+function toLocalEvent(row) {
+  const starts = new Date(row.starts_at)
+  const ends = new Date(row.ends_at)
+
+  return {
+    id: row.id,
+    dateKey: getDateKey(starts),
+    message: row.title,
+    start: `${String(starts.getHours()).padStart(2, '0')}:${String(starts.getMinutes()).padStart(2, '0')}`,
+    end: `${String(ends.getHours()).padStart(2, '0')}:${String(ends.getMinutes()).padStart(2, '0')}`,
+    color: row.color
+  }
+}
+
+async function saveEvent() {
+  if (isSaving.value) return
+
+  if (editingEvent.value.start >= editingEvent.value.end) {
+    saveError.value = 'End time must be after start time.'
+    return
+  }
+
+  isSaving.value = true
+  saveError.value = ''
+
+  try {
+    const payload = toDbPayload(editingEvent.value)
+
+    if (originalEvent.value) {
+      const updated = await updateEvent(originalEvent.value.id, payload)
+      Object.assign(originalEvent.value, toLocalEvent(updated))
+    } else {
+      const created = await createEvent(authStore.user.id, payload)
+      addLocalEvent(toLocalEvent(created))
+    }
+
+    editingEvent.value = null
+    originalEvent.value = null
+  } catch (error) {
+    saveError.value = error.message ?? 'Could not save this event.'
+  } finally {
+    isSaving.value = false
+  }
 }
 
 function updateWeek() {
@@ -149,17 +207,28 @@ function onEventDragMove(pointerEvent) {
   dragState.value.event.end = hoursToTime(newStart + dragState.value.duration)
 }
 
-function onEventDragEnd() {
+async function onEventDragEnd() {
   window.removeEventListener('pointermove', onEventDragMove)
   window.removeEventListener('pointerup', onEventDragEnd)
 
-  if (dragState.value?.moved) {
-    justDragged.value = true
-  }
+  const draggedEvent = dragState.value?.event
+  const moved = dragState.value?.moved
 
   dragState.value = null
   draggingEvent.value = null
+
+  if (!moved) return
+
+  justDragged.value = true
+
+  try {
+    await updateEvent(draggedEvent.id, toDbPayload(draggedEvent))
+  } catch (error) {
+    console.error('Failed to save rescheduled event', error)
+  }
 }
+
+const isManualEntry = ref(false)
 
 function eventClicked(event) {
   if (justDragged.value) {
@@ -167,12 +236,14 @@ function eventClicked(event) {
     return
   }
 
+  isManualEntry.value = false
   originalEvent.value = event
   editingEvent.value = { ...event }
 }
 
-function openNewEvent(day, hour) {
+function openNewEvent(day, hour, manual = false) {
   const endHourValue = Math.min(hour + 1, 23)
+  isManualEntry.value = manual
   originalEvent.value = null
   editingEvent.value = {
     dateKey: getDateKey(day),
@@ -186,36 +257,43 @@ function openNewEvent(day, hour) {
 function openNewEventDefault() {
   const today = new Date()
   const todayInView = days.value.find((day) => getDateKey(day) === getDateKey(today))
-  openNewEvent(todayInView ?? days.value[0], today.getHours())
+  openNewEvent(todayInView ?? days.value[0], today.getHours(), true)
 }
 
 function closePopup() {
   editingEvent.value = null
   originalEvent.value = null
+  saveError.value = ''
 }
 
-function deleteEvent() {
-  if (!originalEvent.value) return
+async function deleteEvent() {
+  if (!originalEvent.value || isSaving.value) return
 
-  for (const dateKey of Object.keys(eventsByDate)) {
-    const index = eventsByDate[dateKey].indexOf(originalEvent.value)
-    if (index !== -1) {
-      removeEvent(dateKey, index)
-      break
-    }
+  isSaving.value = true
+  saveError.value = ''
+
+  try {
+    await deleteEventRow(originalEvent.value.id)
+    removeLocalEvent(originalEvent.value)
+    editingEvent.value = null
+    originalEvent.value = null
+  } catch (error) {
+    saveError.value = error.message ?? 'Could not delete this event.'
+  } finally {
+    isSaving.value = false
   }
-
-  editingEvent.value = null
-  originalEvent.value = null
 }
 
-addEvent(getDateKey(new Date()), {
-  message: "COMP 322 Midterm",
-  start: "02:00",
-  end: "05:15",
-  color: "pink"
-})
 updateWeek()
+
+onMounted(async () => {
+  try {
+    const rows = await fetchEvents()
+    rows.forEach((row) => addLocalEvent(toLocalEvent(row)))
+  } catch (error) {
+    console.error('Failed to load events', error)
+  }
+})
 </script>
 
 <template>
@@ -227,30 +305,52 @@ updateWeek()
 
         <div class="popup" @click.stop>
 
-          <input v-model="editingEvent.message" placeholder="Add a title">
+          <h3 class="popup-title">{{ originalEvent ? 'Edit Event' : 'New Event' }}</h3>
 
-          <input v-model="editingEvent.start" type="time">
-
-          <input v-model="editingEvent.end" type="time">
-
-          <div class="color-picker">
-            <button
-                v-for="colorOption in colorOptions"
-                :key="colorOption"
-                type="button"
-                class="color-swatch"
-                :class="[`event-${colorOption}`, { 'color-swatch--active': editingEvent.color === colorOption }]"
-                :aria-label="colorOption"
-                @click="editingEvent.color = colorOption"
-            ></button>
+          <div class="field">
+            <label for="event-title">Title</label>
+            <input id="event-title" v-model="editingEvent.message" placeholder="e.g. Study group, exam, appointment">
           </div>
 
+          <div v-if="isManualEntry" class="field">
+            <label for="event-date">Date</label>
+            <input id="event-date" v-model="editingEvent.dateKey" type="date">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="event-start">Start</label>
+              <input id="event-start" v-model="editingEvent.start" type="time">
+            </div>
+            <div class="field">
+              <label for="event-end">End</label>
+              <input id="event-end" v-model="editingEvent.end" type="time">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Color</label>
+            <div class="color-picker">
+              <button
+                  v-for="colorOption in colorOptions"
+                  :key="colorOption"
+                  type="button"
+                  class="color-swatch"
+                  :class="[`event-${colorOption}`, { 'color-swatch--active': editingEvent.color === colorOption }]"
+                  :aria-label="colorOption"
+                  @click="editingEvent.color = colorOption"
+              ></button>
+            </div>
+          </div>
+
+          <p v-if="saveError" class="popup-error">{{ saveError }}</p>
+
           <div class="popup-actions">
-            <button class="popup-save" @click="saveEvent">
-              Save
+            <button class="popup-save" :disabled="isSaving" @click="saveEvent">
+              {{ isSaving ? 'Saving…' : 'Save' }}
             </button>
 
-            <button v-if="originalEvent" class="popup-delete" type="button" @click="deleteEvent">
+            <button v-if="originalEvent" class="popup-delete" type="button" :disabled="isSaving" @click="deleteEvent">
               Delete
             </button>
           </div>
@@ -270,7 +370,7 @@ updateWeek()
           </h2>
           <button class="calendar-nav" @click="nextWeek()"> &gt; </button>
         </div>
-        <button class="new-task-btn" @click="openNewEventDefault()">+ New Task</button>
+        <button class="new-task-btn" @click="openNewEventDefault()">+ Add Event</button>
       </div>
 
       <div class="hour-range-picker">
@@ -370,7 +470,7 @@ updateWeek()
   border: none;
   border-radius: 10px;
   padding: 12px 22px;
-  background: var(--shell-green);
+  background: var(--shell-orange);
   color: #fff;
   font-size: 15px;
   font-weight: 600;
@@ -380,7 +480,7 @@ updateWeek()
 }
 
 .new-task-btn:hover {
-  background: color-mix(in srgb, var(--shell-green) 85%, black);
+  background: color-mix(in srgb, var(--shell-orange) 85%, black);
 }
 
 .calendar-nav {
@@ -571,15 +671,45 @@ updateWeek()
 .popup {
   background: var(--shell-card);
   border: 1px solid var(--shell-border);
-  padding: 25px;
-  border-radius: 16px;
+  padding: 28px;
+  border-radius: 18px;
 
-  width: 300px;
+  width: 360px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 
   box-shadow: 0 10px 30px color-mix(in srgb, var(--shell-text) 20%, transparent);
+}
+
+.popup-title {
+  font-family: var(--shell-serif);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--shell-text);
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--shell-text-muted);
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field-row .field {
+  flex: 1;
+  min-width: 0;
 }
 
 .popup input {
@@ -589,6 +719,11 @@ updateWeek()
   font: inherit;
   color: var(--shell-text);
   background: var(--shell-bg);
+}
+
+.popup-error {
+  color: #dc2626;
+  font-size: 13px;
 }
 
 .color-picker {
@@ -650,5 +785,49 @@ updateWeek()
 
 .popup-delete:hover {
   background: color-mix(in srgb, #dc2626 85%, black);
+}
+
+.popup-save:disabled,
+.popup-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .calendar-card {
+    padding: 16px;
+  }
+
+  .calendar-header {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .new-task-btn {
+    width: 100%;
+  }
+
+  .hour-range-picker {
+    flex-wrap: wrap;
+  }
+
+  .calendar-body {
+    overflow-x: auto;
+  }
+
+  .time-bar {
+    position: sticky;
+    left: 0;
+    background: var(--shell-card);
+    z-index: 1;
+  }
+
+  .week {
+    min-width: 630px;
+  }
+
+  .popup {
+    width: min(360px, calc(100vw - 48px));
+  }
 }
 </style>
