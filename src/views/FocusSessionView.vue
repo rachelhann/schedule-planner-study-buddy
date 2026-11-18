@@ -1,12 +1,16 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useAuthStore } from '../stores/auth'
+import { GROWTH_STAGES, SESSIONS_PER_STAGE, getStageIndex } from '../lib/growthStages'
+import { fetchCompletedSessionCount, createCompletedSession } from '../lib/sessionsApi'
+import { createNotification } from '../lib/notificationsApi'
+
+const authStore = useAuthStore()
 
 const PRESETS = [
   { key: '25-5', label: '25 / 5', work: 25, break: 5 },
   { key: '50-10', label: '50 / 10', work: 50, break: 10 },
 ]
-const GROWTH_STAGES = ['Seedling', 'Sprouting', 'Budding', 'Blooming', 'Flourishing']
-const SESSIONS_PER_STAGE = 3
 const TARGET_ROUNDS = 4
 
 const activePreset = ref(PRESETS[0].key)
@@ -17,10 +21,13 @@ const mode = ref('work') // 'work' | 'break'
 const remainingSeconds = ref(workMinutes.value * 60)
 const running = ref(false)
 const completedSessions = ref(0)
+const totalCompletedSessions = ref(0)
 
 let intervalId = null
 
-const totalSeconds = computed(() => Math.max(1, mode.value === 'work' ? workMinutes.value : breakMinutes.value) * 60)
+const totalSeconds = computed(() =>
+  Math.max(1, Math.round((mode.value === 'work' ? workMinutes.value : breakMinutes.value) * 60))
+)
 const minutesLabel = computed(() => Math.floor(remainingSeconds.value / 60))
 const secondsLabel = computed(() => String(remainingSeconds.value % 60).padStart(2, '0'))
 
@@ -42,12 +49,37 @@ const todaysRounds = computed(() => {
   })
 })
 
-const stageIndex = computed(() => Math.min(Math.floor(completedSessions.value / SESSIONS_PER_STAGE), GROWTH_STAGES.length - 1))
-const stageName = computed(() => GROWTH_STAGES[stageIndex.value])
+const stageIndex = computed(() => getStageIndex(totalCompletedSessions.value))
+const stageName = computed(() => GROWTH_STAGES[stageIndex.value].label)
 const sessionsToNextStage = computed(() => {
   if (stageIndex.value >= GROWTH_STAGES.length - 1) return null
-  return SESSIONS_PER_STAGE - (completedSessions.value % SESSIONS_PER_STAGE)
+  return SESSIONS_PER_STAGE - (totalCompletedSessions.value % SESSIONS_PER_STAGE)
 })
+
+async function recordCompletedSession() {
+  const previousStageIndex = getStageIndex(totalCompletedSessions.value)
+  const endedAt = new Date()
+  const startedAt = new Date(endedAt.getTime() - workMinutes.value * 60000)
+
+  try {
+    await createCompletedSession(authStore.user.id, {
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+    })
+    totalCompletedSessions.value += 1
+
+    const newStageIndex = getStageIndex(totalCompletedSessions.value)
+    if (newStageIndex > previousStageIndex) {
+      await createNotification(authStore.user.id, {
+        title: `Your plant grew! Now ${GROWTH_STAGES[newStageIndex].label}`,
+        message: `You've completed ${totalCompletedSessions.value} focus sessions.`,
+        scheduled_for: endedAt.toISOString(),
+      })
+    }
+  } catch (error) {
+    console.error('Failed to record completed session', error)
+  }
+}
 
 function tick() {
   if (remainingSeconds.value > 0) {
@@ -57,10 +89,11 @@ function tick() {
   if (mode.value === 'work') {
     completedSessions.value += 1
     mode.value = 'break'
-    remainingSeconds.value = breakMinutes.value * 60
+    remainingSeconds.value = totalSeconds.value
+    recordCompletedSession()
   } else {
     mode.value = 'work'
-    remainingSeconds.value = workMinutes.value * 60
+    remainingSeconds.value = totalSeconds.value
   }
 }
 
@@ -102,6 +135,14 @@ watch([workMinutes, breakMinutes], () => {
 
 onBeforeUnmount(() => {
   clearInterval(intervalId)
+})
+
+onMounted(async () => {
+  try {
+    totalCompletedSessions.value = await fetchCompletedSessionCount()
+  } catch (error) {
+    console.error('Failed to load completed session count', error)
+  }
 })
 </script>
 
@@ -168,7 +209,7 @@ onBeforeUnmount(() => {
         <div v-if="activePreset === 'custom'" class="focus-page__custom">
           <label>
             Work minutes
-            <input v-model.number="workMinutes" type="number" min="1" max="120" :disabled="running" />
+            <input v-model.number="workMinutes" type="number" min="0.0334" max="120" step="0.01" :disabled="running" />
           </label>
           <label>
             Break minutes
@@ -189,7 +230,7 @@ onBeforeUnmount(() => {
           <p class="focus-page__plant-label">Your plant</p>
           <p class="focus-page__plant-stage">{{ stageName }} stage</p>
           <p class="focus-page__plant-caption">
-            {{ sessionsToNextStage !== null ? `${sessionsToNextStage} session${sessionsToNextStage === 1 ? '' : 's'} to ${GROWTH_STAGES[stageIndex + 1]}` : 'Fully grown' }}
+            {{ sessionsToNextStage !== null ? `${sessionsToNextStage} session${sessionsToNextStage === 1 ? '' : 's'} to ${GROWTH_STAGES[stageIndex + 1].label}` : 'Fully grown' }}
           </p>
         </div>
       </div>

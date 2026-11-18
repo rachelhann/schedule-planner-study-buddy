@@ -1,31 +1,33 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { GROWTH_STAGES as STAGES, SESSIONS_PER_STAGE, getStageIndex } from '../lib/growthStages'
+import { fetchCompletedSessionCount } from '../lib/sessionsApi'
 
-const STAGES = [
-  { key: 'seedling', label: 'Seedling' },
-  { key: 'sprout', label: 'Sprout' },
-  { key: 'budding', label: 'Budding' },
-  { key: 'blooming', label: 'Blooming' },
-  { key: 'full-bloom', label: 'Full Bloom' },
-]
-const SESSIONS_PER_STAGE = 15
-
-// placeholder state for a brand-new plant. TODO(backend): replace these four
-// refs with real session/streak/history data once API exists.
 const totalSessions = ref(0)
+
+// placeholder state. TODO(backend): replace these with real streak/history
+// data once that's tracked; totalSessions above is already real.
 const currentStreak = ref(0)
 const longestStreak = ref(0)
 const growthHistory = ref([
   { label: 'Planted seedling', date: 'Today' },
 ])
 
-const stageIndex = computed(() => Math.min(Math.floor(totalSessions.value / SESSIONS_PER_STAGE), STAGES.length - 1))
+const stageIndex = computed(() => getStageIndex(totalSessions.value))
 const currentStage = computed(() => STAGES[stageIndex.value])
 const isFullyGrown = computed(() => stageIndex.value === STAGES.length - 1)
 const sessionsIntoStage = computed(() => totalSessions.value - stageIndex.value * SESSIONS_PER_STAGE)
 const progressPercent = computed(() => (isFullyGrown.value ? 100 : Math.min(100, (sessionsIntoStage.value / SESSIONS_PER_STAGE) * 100)))
 const sessionsToNext = computed(() => (isFullyGrown.value ? null : SESSIONS_PER_STAGE - sessionsIntoStage.value))
 const nextStageLabel = computed(() => (isFullyGrown.value ? null : STAGES[stageIndex.value + 1].label))
+
+onMounted(async () => {
+  try {
+    totalSessions.value = await fetchCompletedSessionCount()
+  } catch (error) {
+    console.error('Failed to load completed session count', error)
+  }
+})
 </script>
 
 <template>

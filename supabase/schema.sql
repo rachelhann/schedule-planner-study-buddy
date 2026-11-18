@@ -44,6 +44,8 @@ alter table public.events drop constraint if exists events_color_check;
 alter table public.events add constraint events_color_check
   check (color in ('green', 'orange', 'pink', 'lavender', 'mint', 'yellow', 'sky'));
 
+alter table public.events add column if not exists reminder_sent boolean not null default false;
+
 -- comp keys
 create unique index if not exists tasks_user_id_id_key on public.tasks (user_id, id);
 create unique index if not exists events_user_id_id_key on public.events (user_id, id);
